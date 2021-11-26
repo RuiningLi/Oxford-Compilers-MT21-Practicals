@@ -34,9 +34,14 @@ and gen_addr v =
       Variable x ->
         let d = get_def x in
         SEQ [LINE x.x_line; GLOBAL d.d_lab]
-    | Sub (v, i) ->
-        let s = type_size (base_type v.e_type) in
-        SEQ [gen_addr(v); gen_expr(i); CONST s; BINOP Times; BINOP Plus]
+    | Sub (a, i) ->
+        let s = type_size (base_type a.e_type) in
+        let n =
+          match a.e_type with
+              Array (x, t) -> x
+            | _ -> failwith "Only Array type could be subscripted"
+        in
+        SEQ [gen_addr(a); gen_expr(i); CONST n; BOUND (line_number v); CONST s; BINOP Times; BINOP Plus]
     | _ ->
         failwith "gen_addr"
 

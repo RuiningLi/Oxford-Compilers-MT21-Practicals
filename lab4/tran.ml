@@ -14,6 +14,7 @@ let release =
       Register reg -> release_reg reg
     | Index (reg, off) -> release_reg reg
     | Index2 (r1, r2, n) -> release_reg r1; release_reg r2
+    | Shift (reg, n) -> release_reg reg 
     | _ -> ()
 
 let fix_reg r = Register (get_reg (reg_of r))
@@ -139,7 +140,37 @@ let rec e_reg t r =
     | <BINOP Asr, t1, t2> -> binary "asr" t1 t2
     | <BINOP BitAnd, t1, t2> -> binary "and" t1 t2
     | <BINOP BitOr, t1, t2> -> binary "orr" t1 t2
-
+    
+    | <BINOP Times, t1, <CONST 3>> ->
+        let v1 = e_reg t1 anyreg in
+        let r1 = reg_of v1 in
+        reserve_reg r1;
+        gen_reg "add" [r; v1; Shift (r1, 1)]
+    | <BINOP Times, t1, <CONST 9>> ->
+        let v1 = e_reg t1 anyreg in
+        let r1 = reg_of v1 in
+        reserve_reg r1;
+        gen_reg "add" [r; v1; Shift (r1, 3)]
+    | <BINOP Times, t1, <CONST 10>> ->
+        let v1 = e_reg t1 anyreg in
+        let r1 = reg_of v1 in
+        reserve_reg r1;
+        let r2 = gen_reg "mov" [r; Shift (r1, 3)] in
+        gen_reg "add" [r; r2; Shift (r1, 1)]
+    | <BINOP Times, t1, <CONST 36>> ->
+        let v1 = e_reg t1 anyreg in
+        let r1 = reg_of v1 in
+        reserve_reg r1;
+        let r2 = gen_reg "mov" [r; Shift (r1, 5)] in
+        gen_reg "add" [r; r2; Shift (r1, 2)]
+    | <BINOP Times, t1, <CONST 324>> ->
+        let v1 = e_reg t1 anyreg in
+        let r1 = reg_of v1 in
+        reserve_reg r1;
+        let r2 = gen_reg "mov" [r; Shift (r1, 5)] in
+        let r3 = gen_reg "add" [r; r2; Shift (r1, 2)] in
+        reserve_reg (reg_of r3);
+        gen_reg "add" [r; r3; Shift (reg_of r3, 3)]
     | <BINOP Times, t1, t2> ->
         (* The mul instruction needs both operands in registers *)
         let v1 = e_reg t1 anyreg in
@@ -177,6 +208,8 @@ and e_rand =
   (* returns |Const| or |Register| *)
   function
       <CONST k> when fits_immed k -> Const k
+    | <BINOP Lsl, t1, <CONST n>> ->
+        let v1 = e_reg t1 anyreg in Shift (reg_of v1, n)
     | t -> e_reg t anyreg
 
 (* |e_addr| -- evaluate to form an address for ldr or str *)
@@ -188,6 +221,12 @@ and e_addr =
     | <OFFSET, t1, <CONST n>> when fits_offset n ->
         let v1 = e_reg t1 anyreg in
         Index (reg_of v1, n)
+    | <OFFSET, t1, <BINOP Lsl, t2, <CONST n>>> ->
+        let v1 = e_reg t1 anyreg and v2 = e_reg t2 anyreg in
+        Index2 (reg_of v1, reg_of v2, n)
+    | <OFFSET, t1, t2> ->
+        let v1 = e_reg t1 anyreg and v2 = e_reg t2 anyreg in
+        Index2 (reg_of v1, reg_of v2, 0)
     | t ->
         let v1 = e_reg t anyreg in
         Index (reg_of v1, 0)
